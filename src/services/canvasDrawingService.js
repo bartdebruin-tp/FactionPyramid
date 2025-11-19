@@ -69,8 +69,75 @@ export class CanvasDrawingService {
         this.ctx.moveTo(fromNode.x, fromNode.y)
         this.ctx.lineTo(toNode.x, toNode.y)
         this.ctx.stroke()
+        
+        // Draw labels if they exist
+        if (conn.fromLabel || conn.toLabel) {
+          this.drawConnectionLabels(conn, fromNode, toNode)
+        }
       }
     })
+  }
+
+  /**
+   * Draw labels on a connection
+   */
+  drawConnectionLabels(connection, fromNode, toNode) {
+    this.ctx.save()
+    
+    // Set text style
+    this.ctx.font = '13px Inter, system-ui, sans-serif'
+    this.ctx.textAlign = 'center'
+    this.ctx.textBaseline = 'middle'
+    this.ctx.fillStyle = '#334155'
+    
+    const dx = toNode.x - fromNode.x
+    const dy = toNode.y - fromNode.y
+    
+    // Calculate angle of the connection line
+    let angle = Math.atan2(dy, dx)
+    
+    // Flip text if pointing left (angle between π/2 and 3π/2, or 90° to 270°)
+    // This keeps text readable by rotating it 180° when upside down
+    const isPointingLeft = angle > Math.PI / 2 || angle < -Math.PI / 2
+    if (isPointingLeft) {
+      angle += Math.PI
+    }
+    
+    // Calculate perpendicular offset based on angle
+    const offsetDistance = 13
+    const perpOffsetX = -Math.sin(angle) * offsetDistance
+    const perpOffsetY = Math.cos(angle) * offsetDistance
+    
+    // Flip offset direction when text is flipped
+    const offsetMultiplier = isPointingLeft ? -1 : 1
+    
+    // From side label - positioned on bottom side of the line
+    if (connection.fromLabel) {
+      const fromX = fromNode.x + dx * 0.5
+      const fromY = fromNode.y + dy * 0.5
+      
+      this.ctx.save()
+      this.ctx.translate(fromX - perpOffsetX * offsetMultiplier, fromY - perpOffsetY * offsetMultiplier)
+      this.ctx.rotate(angle)
+      let fromLabelText = isPointingLeft ? "← " + connection.fromLabel : connection.fromLabel + " →"
+      this.ctx.fillText(fromLabelText, 0, 0)
+      this.ctx.restore()
+    }
+    
+    // To side label - positioned on top side of the line
+    if (connection.toLabel) {
+      const toX = fromNode.x + dx * 0.5
+      const toY = fromNode.y + dy * 0.5
+      
+      this.ctx.save()
+      this.ctx.translate(toX + perpOffsetX * offsetMultiplier, toY + perpOffsetY * offsetMultiplier)
+      this.ctx.rotate(angle)
+      let toLabelText = isPointingLeft ? connection.toLabel + " →" : "← " + connection.toLabel
+      this.ctx.fillText(toLabelText, 0, 0)
+      this.ctx.restore()
+    }
+    
+    this.ctx.restore()
   }
 
   /**

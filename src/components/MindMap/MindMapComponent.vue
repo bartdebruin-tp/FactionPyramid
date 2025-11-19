@@ -2,6 +2,7 @@
 import { ref, reactive, onMounted, onUnmounted, watch } from 'vue'
 import { useFactionStore } from '../../stores/faction'
 import UpdateOrganizationNodePopupComponent from '../Popup/UpdateOrganizationNodePopupComponent.vue'
+import UpdateConnectionLabelPopupComponent from '../Popup/UpdateConnectionLabelPopupComponent.vue'
 import MindMapToolbarComponent from './MindMapToolbarComponent.vue'
 import MindMapTooltipComponent from './MindMapTooltipComponent.vue'
 import { CanvasDrawingService } from '../../services/canvasDrawingService'
@@ -45,6 +46,10 @@ const isModalOpen = ref(false)
 const modalMode = ref('add') // 'add' or 'edit'
 const currentNodeId = ref(null)
 const currentParentId = ref(null)
+
+// Connection label modal state
+const isConnectionLabelModalOpen = ref(false)
+const editingConnection = ref(null)
 
 // Mouse state
 const mousePos = reactive({ x: 0, y: 0 })
@@ -197,7 +202,12 @@ const loadFromDatamodel = () => {
   // Create connections based on manager relationships
   for (const [nodeId, nodeData] of Object.entries(pyramidData)) {
     if (nodeData.manager) {
-      connections.push({ from: nodeData.manager, to: nodeId })
+      connections.push({
+        from: nodeData.manager,
+        to: nodeId,
+        fromLabel: nodeData.connectionFromLabel || '',
+        toLabel: nodeData.connectionToLabel || ''
+      })
     }
   }
   
@@ -235,6 +245,15 @@ const syncToDatamodel = () => {
     // Preserve existing data from store if it exists
     const existingData = factionStore.pyramid[node.id] || {}
     
+    // Get connection labels if this node has a parent
+    let connectionLabels = {}
+    if (parentConnection) {
+      connectionLabels = {
+        connectionFromLabel: parentConnection.fromLabel || '',
+        connectionToLabel: parentConnection.toLabel || ''
+      }
+    }
+    
     newPyramid[node.id] = {
       name: node.text,
       manager: manager || '',
@@ -242,7 +261,8 @@ const syncToDatamodel = () => {
       description: existingData.description || '',
       x: node.x,
       y: node.y,
-      color: node.color
+      color: node.color,
+      ...connectionLabels
     }
   })
   
@@ -326,6 +346,66 @@ const getNodeAtPosition = (x, y) => {
     }
   }
   return null
+}
+
+// Helper function to find connection at position
+const getConnectionAtPosition = (x, y, threshold = 10) => {
+  const adjustedX = x - panOffset.x
+  const adjustedY = y - panOffset.y
+  
+  for (const conn of connections) {
+    const fromNode = nodes.find(n => n.id === conn.from)
+    const toNode = nodes.find(n => n.id === conn.to)
+    
+    if (!fromNode || !toNode) continue
+    
+    // Calculate distance from point to line segment
+    const distance = pointToLineDistance(
+      adjustedX, adjustedY,
+      fromNode.x, fromNode.y,
+      toNode.x, toNode.y
+    )
+    
+    if (distance < threshold) {
+      return conn
+    }
+  }
+  
+  return null
+}
+
+// Calculate distance from point to line segment
+const pointToLineDistance = (px, py, x1, y1, x2, y2) => {
+  const A = px - x1
+  const B = py - y1
+  const C = x2 - x1
+  const D = y2 - y1
+  
+  const dot = A * C + B * D
+  const lenSq = C * C + D * D
+  let param = -1
+  
+  if (lenSq !== 0) {
+    param = dot / lenSq
+  }
+  
+  let xx, yy
+  
+  if (param < 0) {
+    xx = x1
+    yy = y1
+  } else if (param > 1) {
+    xx = x2
+    yy = y2
+  } else {
+    xx = x1 + param * C
+    yy = y1 + param * D
+  }
+  
+  const dx = px - xx
+  const dy = py - yy
+  
+  return Math.sqrt(dx * dx + dy * dy)
 }
 
 const handleCanvasMouseDown = (e) => {
@@ -496,6 +576,13 @@ const handleCanvasDoubleClick = (e) => {
   const rect = canvasRef.value.getBoundingClientRect()
   const x = e.clientX - rect.left
   const y = e.clientY - rect.top
+  
+  // Check if double-clicked on a connection first
+  const connection = getConnectionAtPosition(x, y)
+  if (connection) {
+    openConnectionLabelModal(connection)
+    return
+  }
   
   const node = getNodeAtPosition(x, y)
   
@@ -770,6 +857,27 @@ const onDeleteNode = () => {
   loadFromDatamodel()
 }
 
+// Connection label modal functions
+const openConnectionLabelModal = (connection) => {
+  editingConnection.value = connection
+  isConnectionLabelModalOpen.value = true
+}
+
+const closeConnectionLabelModal = () => {
+  isConnectionLabelModalOpen.value = false
+  editingConnection.value = null
+}
+
+const onSaveConnectionLabel = (data) => {
+  const conn = connections.find(c => c.from === data.from && c.to === data.to)
+  if (conn) {
+    conn.fromLabel = data.fromLabel
+    conn.toLabel = data.toLabel
+    syncToDatamodel()
+    draw()
+  }
+}
+
 // Tooltip functions
 const showTooltip = (node, clientX, clientY) => {
   // Clear any existing timeout
@@ -819,6 +927,13 @@ const hideTooltip = () => {
       @close="closeModal"
       @save="onSaveNode"
       @delete="onDeleteNode"
+    />
+    
+    <UpdateConnectionLabelPopupComponent
+      :isOpen="isConnectionLabelModalOpen"
+      :connection="editingConnection"
+      @close="closeConnectionLabelModal"
+      @save="onSaveConnectionLabel"
     />
     
     <MindMapToolbarComponent 

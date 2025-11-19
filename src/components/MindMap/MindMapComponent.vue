@@ -577,26 +577,28 @@ const handleCanvasDoubleClick = (e) => {
   const x = e.clientX - rect.left
   const y = e.clientY - rect.top
   
-  // Check if double-clicked on a connection first
+  // Check if double-clicked on a node first (nodes take priority)
+  const node = getNodeAtPosition(x, y)
+  
+  if (node) {
+    // Start editing the node
+    startEditingNode(node)
+    return
+  }
+  
+  // Check if double-clicked on a connection
   const connection = getConnectionAtPosition(x, y)
   if (connection) {
     openConnectionLabelModal(connection)
     return
   }
   
-  const node = getNodeAtPosition(x, y)
-  
-  if (node) {
-    // Start editing the node
-    startEditingNode(node)
-  } else {
-    // Create new node at click position (accounting for pan offset) with grid snapping
-    const rawX = x - panOffset.x
-    const rawY = y - panOffset.y
-    const snappedX = snapToGridHorizontal(rawX)
-    const snappedY = snapToGridVertical(rawY)
-    addNode(snappedX, snappedY)
-  }
+  // Create new node at click position (accounting for pan offset) with grid snapping
+  const rawX = x - panOffset.x
+  const rawY = y - panOffset.y
+  const snappedX = snapToGridHorizontal(rawX)
+  const snappedY = snapToGridVertical(rawY)
+  addNode(snappedX, snappedY)
 }
 
 const startEditingNode = (node) => {

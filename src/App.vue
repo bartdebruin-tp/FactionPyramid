@@ -81,7 +81,3 @@ function closeSettings() {
     <SettingsPopupComponent :isOpen="isSettingsOpen" @close="closeSettings" />
   </section>
 </template>
-
-<style scoped>
-
-</style>

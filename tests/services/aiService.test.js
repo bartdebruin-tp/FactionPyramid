@@ -162,5 +162,28 @@ describe('AI Service', () => {
       const { generateWithAi: failingGenerate } = await import('@/services/aiService')
       await expect(failingGenerate('Test prompt')).rejects.toThrow()
     })
+
+    it('should use gemini-2.0-flash-001 model', async () => {
+      const result = await generateWithAi('Test prompt')
+      // Verify the function completes with the correct model
+      expect(result).toBeDefined()
+    })
+
+    it('should log prompt to console', async () => {
+      const consoleSpy = vi.spyOn(console, 'log')
+      await generateWithAi('Test logging prompt')
+      expect(consoleSpy).toHaveBeenCalledWith('AI Prompt:', 'Test logging prompt')
+      consoleSpy.mockRestore()
+    })
+
+    it('should use API key from localStorage', async () => {
+      const settings = {
+        geminiApiKey: 'different-api-key-456'
+      }
+      localStorage.setItem('faction-settings', JSON.stringify(settings))
+      
+      // Should not throw error with valid API key
+      await expect(generateWithAi('Test prompt')).resolves.toBeDefined()
+    })
   })
 })

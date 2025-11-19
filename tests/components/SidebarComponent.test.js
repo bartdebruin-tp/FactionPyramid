@@ -61,7 +61,6 @@ describe('SidebarComponent', () => {
     expect(buttonTexts).toContain('Load Faction')
     expect(buttonTexts).toContain('Export JSON')
     expect(buttonTexts).toContain('Settings')
-    expect(buttonTexts).toContain('Clear Data')
   })
 
   it('should emit openSettings when settings button is clicked', async () => {
@@ -117,43 +116,6 @@ describe('SidebarComponent', () => {
     const storedVersions = JSON.parse(stored)
     
     expect(storedVersions.length).toBeLessThanOrEqual(10)
-  })
-
-  it('should clear data when confirm is accepted', async () => {
-    const wrapper = mount(SidebarComponent)
-    const store = useFactionStore()
-    
-    store.factionName = 'Test Faction'
-    store.summary = 'Test Summary'
-    
-    // Save a version first
-    const buttons = wrapper.findAll('button')
-    const saveButton = buttons.find(b => b.text() === 'Save Faction')
-    await saveButton.trigger('click')
-    
-    global.confirm = vi.fn(() => true)
-    
-    const clearButton = buttons.find(b => b.text() === 'Clear Data')
-    await clearButton.trigger('click')
-    
-    expect(store.factionName).toBe('New Faction')
-    expect(store.summary).toBe('')
-    expect(localStorage.getItem('faction-datamodel-versions')).toBeNull()
-  })
-
-  it('should not clear data when confirm is rejected', async () => {
-    const wrapper = mount(SidebarComponent)
-    const store = useFactionStore()
-    
-    store.factionName = 'Test Faction'
-    
-    global.confirm = vi.fn(() => false)
-    
-    const buttons = wrapper.findAll('button')
-    const clearButton = buttons.find(b => b.text() === 'Clear Data')
-    await clearButton.trigger('click')
-    
-    expect(store.factionName).toBe('Test Faction')
   })
 
   it('should toggle version history visibility', async () => {

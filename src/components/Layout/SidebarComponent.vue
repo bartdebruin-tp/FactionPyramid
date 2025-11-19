@@ -144,7 +144,7 @@ onMounted(() => {
                   <span class="ml-3">Export JSON</span>
               </button>
           </li>
-          <li>
+          <!-- <li>
               <button @click="alert('Export Mermaid')" type="button" class="flex items-center w-full p-2 text-base font-normal text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group">
                   <ArrowDownOnSquareIcon class="size-6" />
                   <span class="ml-3">Export Mermaid</span>
@@ -155,7 +155,7 @@ onMounted(() => {
                   <ArrowDownOnSquareIcon class="size-6" />
                   <span class="ml-3">Export MarkDown</span>
               </button>
-          </li>
+          </li> -->
           <li>
               <button @click="$emit('openSettings')" type="button" class="flex items-center w-full p-2 text-base font-normal text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group">
                   <Cog6ToothIcon class="size-6" />

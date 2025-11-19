@@ -268,11 +268,12 @@ export class CanvasDrawingService {
   }
 
   /**
-   * Apply pan offset transformation
+   * Apply pan offset and zoom transformation
    */
-  applyPanOffset(panOffset) {
+  applyPanOffset(panOffset, zoom = 1) {
     this.ctx.save()
     this.ctx.translate(panOffset.x, panOffset.y)
+    this.ctx.scale(zoom, zoom)
   }
 
   /**

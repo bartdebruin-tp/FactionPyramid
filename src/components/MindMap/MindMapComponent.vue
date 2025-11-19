@@ -5,6 +5,7 @@ import UpdateOrganizationNodePopupComponent from '../Popup/UpdateOrganizationNod
 import UpdateConnectionLabelPopupComponent from '../Popup/UpdateConnectionLabelPopupComponent.vue'
 import MindMapToolbarComponent from './MindMapToolbarComponent.vue'
 import MindMapTooltipComponent from './MindMapTooltipComponent.vue'
+import ZoomControlComponent from './ZoomControlComponent.vue'
 import { CanvasDrawingService } from '../../services/canvasDrawingService'
 import { LayoutService } from '../../services/layoutService'
 
@@ -63,6 +64,10 @@ const isSpacebarHeld = ref(false)
 // Color picker state
 const newNodeColor = ref('#3b82f6')
 
+// Zoom state
+const zoomLevel = ref(1)
+const zoomControlRef = ref(null)
+
 // Tooltip state
 const tooltipVisible = ref(false)
 const tooltipContent = reactive({ name: '', role: '', description: '' })
@@ -98,6 +103,7 @@ onMounted(() => {
     window.addEventListener('resize', resizeCanvas)
     window.addEventListener('keydown', handleKeyDown)
     window.addEventListener('keyup', handleKeyUp)
+    window.addEventListener('wheel', handleWheel, { passive: false })
     
     // Load nodes from datamodel
     loadFromDatamodel()
@@ -107,6 +113,7 @@ onUnmounted(() => {
   window.removeEventListener('resize', resizeCanvas)
   window.removeEventListener('keydown', handleKeyDown)
   window.removeEventListener('keyup', handleKeyUp)
+  window.removeEventListener('wheel', handleWheel)
 })
 
 // Load nodes from datamodel.pyramid
@@ -329,9 +336,9 @@ const addConnection = (fromId, toId) => {
 }
 
 const getNodeAtPosition = (x, y) => {
-  // Adjust for pan offset
-  const adjustedX = x - panOffset.x
-  const adjustedY = y - panOffset.y
+  // Adjust for pan offset and zoom
+  const adjustedX = (x - panOffset.x) / zoomLevel.value
+  const adjustedY = (y - panOffset.y) / zoomLevel.value
   
   // Check from last to first (top to bottom in rendering)
   for (let i = nodes.length - 1; i >= 0; i--) {
@@ -350,8 +357,8 @@ const getNodeAtPosition = (x, y) => {
 
 // Helper function to find connection at position
 const getConnectionAtPosition = (x, y, threshold = 10) => {
-  const adjustedX = x - panOffset.x
-  const adjustedY = y - panOffset.y
+  const adjustedX = (x - panOffset.x) / zoomLevel.value
+  const adjustedY = (y - panOffset.y) / zoomLevel.value
   
   for (const conn of connections) {
     const fromNode = nodes.find(n => n.id === conn.from)
@@ -366,7 +373,7 @@ const getConnectionAtPosition = (x, y, threshold = 10) => {
       toNode.x, toNode.y
     )
     
-    if (distance < threshold) {
+    if (distance < threshold / zoomLevel.value) {
       return conn
     }
   }
@@ -448,8 +455,8 @@ const handleCanvasMouseDown = (e) => {
         const n = nodes.find(nd => nd.id === nodeId)
         return {
           id: nodeId,
-          offsetX: x - panOffset.x - n.x,
-          offsetY: y - panOffset.y - n.y
+          offsetX: (x - panOffset.x) / zoomLevel.value - n.x,
+          offsetY: (y - panOffset.y) / zoomLevel.value - n.y
         }
       })
     } else {
@@ -457,16 +464,16 @@ const handleCanvasMouseDown = (e) => {
       draggingNode.value = node
       selectedNode.value = node
       selectedNodes.value = [node.id] // Replace selection with this node
-      dragOffset.x = x - panOffset.x - node.x
-      dragOffset.y = y - panOffset.y - node.y
+      dragOffset.x = (x - panOffset.x) / zoomLevel.value - node.x
+      dragOffset.y = (y - panOffset.y) / zoomLevel.value - node.y
     }
   } else {
     // Start selection box
     isSelecting.value = true
-    selectionBox.startX = x - panOffset.x
-    selectionBox.startY = y - panOffset.y
-    selectionBox.endX = x - panOffset.x
-    selectionBox.endY = y - panOffset.y
+    selectionBox.startX = (x - panOffset.x) / zoomLevel.value
+    selectionBox.startY = (y - panOffset.y) / zoomLevel.value
+    selectionBox.endX = (x - panOffset.x) / zoomLevel.value
+    selectionBox.endY = (y - panOffset.y) / zoomLevel.value
     // Clear selection
     selectedNode.value = null
     selectedNodes.value = []
@@ -487,8 +494,8 @@ const handleCanvasMouseMove = (e) => {
     draw()
   } else if (isSelecting.value) {
     // Update selection box end position
-    selectionBox.endX = mousePos.x - panOffset.x
-    selectionBox.endY = mousePos.y - panOffset.y
+    selectionBox.endX = (mousePos.x - panOffset.x) / zoomLevel.value
+    selectionBox.endY = (mousePos.y - panOffset.y) / zoomLevel.value
     hideTooltip()
     draw()
   } else if (draggingNode.value) {
@@ -497,8 +504,8 @@ const handleCanvasMouseMove = (e) => {
       multiDragOffsets.value.forEach(offset => {
         const node = nodes.find(n => n.id === offset.id)
         if (node) {
-          const rawX = mousePos.x - panOffset.x - offset.offsetX
-          const rawY = mousePos.y - panOffset.y - offset.offsetY
+          const rawX = (mousePos.x - panOffset.x) / zoomLevel.value - offset.offsetX
+          const rawY = (mousePos.y - panOffset.y) / zoomLevel.value - offset.offsetY
           // Snap: center for X, top for Y
           node.x = snapToGridHorizontal(rawX)
           node.y = snapToGridVertical(rawY + node.height / 2) - node.height / 2
@@ -506,8 +513,8 @@ const handleCanvasMouseMove = (e) => {
       })
     } else {
       // Move single node with grid snapping
-      const rawX = mousePos.x - panOffset.x - dragOffset.x
-      const rawY = mousePos.y - panOffset.y - dragOffset.y
+      const rawX = (mousePos.x - panOffset.x) / zoomLevel.value - dragOffset.x
+      const rawY = (mousePos.y - panOffset.y) / zoomLevel.value - dragOffset.y
       // Snap: center for X, top for Y
       draggingNode.value.x = snapToGridHorizontal(rawX)
       draggingNode.value.y = snapToGridVertical(rawY + draggingNode.value.height / 2) - draggingNode.value.height / 2
@@ -593,9 +600,9 @@ const handleCanvasDoubleClick = (e) => {
     return
   }
   
-  // Create new node at click position (accounting for pan offset) with grid snapping
-  const rawX = x - panOffset.x
-  const rawY = y - panOffset.y
+  // Create new node at click position (accounting for pan offset and zoom) with grid snapping
+  const rawX = (x - panOffset.x) / zoomLevel.value
+  const rawY = (y - panOffset.y) / zoomLevel.value
   const snappedX = snapToGridHorizontal(rawX)
   const snappedY = snapToGridVertical(rawY)
   addNode(snappedX, snappedY)
@@ -642,8 +649,8 @@ const draw = () => {
   const canvas = canvasRef.value
   drawingService.clearCanvas(canvas.width, canvas.height)
   
-  // Apply pan offset
-  drawingService.applyPanOffset(panOffset)
+  // Apply pan offset and zoom
+  drawingService.applyPanOffset(panOffset, zoomLevel.value)
   
   // Draw connections
   drawingService.drawConnections(connections, nodes)
@@ -776,8 +783,31 @@ const reorganizeLayout = () => {
   draw()
 }
 
+// Mouse wheel for zooming
+const handleWheel = (e) => {
+  // Only zoom if Ctrl/Cmd is held
+  if (e.ctrlKey || e.metaKey) {
+    e.preventDefault()
+    
+    const delta = -e.deltaY * 0.001
+    const newZoom = Math.min(Math.max(zoomLevel.value + delta, 0.1), 3)
+    zoomLevel.value = parseFloat(newZoom.toFixed(2))
+    draw()
+  }
+}
+
+// Watch zoom level changes
+watch(zoomLevel, () => {
+  draw()
+})
+
 // Keyboard shortcuts
 const handleKeyDown = (e) => {
+  // Forward keyboard events to zoom control
+  if (zoomControlRef.value) {
+    zoomControlRef.value.handleKeyboard(e)
+  }
+  
   // Track spacebar for panning
   if (e.code === 'Space' && !editingNode.value) {
     if (!isSpacebarHeld.value) {
@@ -880,6 +910,13 @@ const onSaveConnectionLabel = (data) => {
   }
 }
 
+// Reset pan to center
+const handleResetPan = () => {
+  panOffset.x = 0
+  panOffset.y = 0
+  draw()
+}
+
 // Tooltip functions
 const showTooltip = (node, clientX, clientY) => {
   // Clear any existing timeout
@@ -920,7 +957,7 @@ const hideTooltip = () => {
 </script>
 
 <template>
-  <div class="mindmap-container">
+  <div class="w-full h-screen flex flex-col bg-slate-50 relative">
     <UpdateOrganizationNodePopupComponent 
       :isOpen="isModalOpen"
       :nodeId="currentNodeId"
@@ -948,7 +985,7 @@ const hideTooltip = () => {
     
     <div 
       ref="canvasContainer" 
-      class="canvas-container"
+      class="flex-1 relative overflow-hidden bg-white w-full bg-[linear-gradient(rgb(100_116_139/0.1)_1px,transparent_1px),linear-gradient(90deg,rgb(100_116_139/0.1)_1px,transparent_1px)] bg-size-[20px_20px]"
     >
       <canvas
         ref="canvasRef"
@@ -958,6 +995,7 @@ const hideTooltip = () => {
         @mouseleave="handleCanvasMouseLeave"
         @dblclick="handleCanvasDoubleClick"
         @contextmenu.prevent
+        class="block w-full h-full"
         :style="{ cursor: isPanning ? 'grabbing' : isSpacebarHeld ? 'grab' : hoveredNode ? 'pointer' : 'default' }"
       ></canvas>
       
@@ -969,15 +1007,27 @@ const hideTooltip = () => {
         @blur="finishEditingNode"
         @keydown.enter.prevent="finishEditingNode"
         @keydown.esc.prevent="cancelEditingNode"
-        class="inline-editor"
+        class="absolute p-2 border-2 border-blue-500 rounded-lg text-sm font-bold font-sans text-center bg-blue-600 text-white outline-none shadow-[0_4px_12px_rgb(59_130_246/0.4)] z-1000 placeholder:text-white/60"
         :style="{
-          left: (editingNode.x + panOffset.x - editingNode.width / 2) + 'px',
-          top: (editingNode.y + panOffset.y - editingNode.height / 2) + 'px',
-          width: editingNode.width + 'px',
-          height: editingNode.height + 'px'
+          left: (editingNode.x * zoomLevel + panOffset.x - editingNode.width * zoomLevel / 2) + 'px',
+          top: (editingNode.y * zoomLevel + panOffset.y - editingNode.height * zoomLevel / 2) + 'px',
+          width: (editingNode.width * zoomLevel) + 'px',
+          height: (editingNode.height * zoomLevel) + 'px'
         }"
         ref="inlineInput"
       />
+      
+      <!-- Zoom Control -->
+      <div class="absolute bottom-4 right-4 z-10">
+        <ZoomControlComponent 
+          v-model="zoomLevel"
+          ref="zoomControlRef"
+          :minZoom="0.1"
+          :maxZoom="3"
+          :zoomStep="0.1"
+          @resetPan="handleResetPan"
+        />
+      </div>
       
       <!-- Tooltip -->
       <MindMapTooltipComponent 
@@ -988,52 +1038,3 @@ const hideTooltip = () => {
     </div>
   </div>
 </template>
-
-<style scoped>
-.mindmap-container {
-  width: 100%;
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
-  background: #f8fafc;
-  position: relative;
-}
-
-.canvas-container {
-  flex: 1;
-  position: relative;
-  overflow: hidden;
-  background: #ffffff;
-  background-image: 
-    linear-gradient(rgba(100, 116, 139, 0.1) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(100, 116, 139, 0.1) 1px, transparent 1px);
-  background-size: 20px 20px;
-  width: 100%;
-}
-
-canvas {
-  display: block;
-  width: 100%;
-  height: 100%;
-}
-
-.inline-editor {
-  position: absolute;
-  padding: 0.5rem;
-  border: 2px solid #3b82f6;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: bold;
-  font-family: Inter, system-ui, sans-serif;
-  text-align: center;
-  background: #2563eb;
-  color: white;
-  outline: none;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
-  z-index: 1000;
-}
-
-.inline-editor::placeholder {
-  color: rgba(255, 255, 255, 0.6);
-}
-</style>
